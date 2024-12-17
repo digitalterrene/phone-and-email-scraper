@@ -1,0 +1,15 @@
+{
+  "name": "scrape.js",
+  "version": "1.0.0",
+  "description": "This simple to use node js script allows users to scrap the email and phone numbers from a web page",
+  "main": "scrape.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "digitalterrene",
+  "license": "ISC",
+  "dependencies": {
+    "csv-writer": "^1.6.0",
+    "puppeteer": "^23.10.4"
+  }
+}
