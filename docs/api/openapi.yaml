@@ -1,0 +1,468 @@
+openapi: 3.0.3
+info:
+  title: Phone and Email Scraper API
+  version: 1.0.0
+  description: |
+    Interactive REST API for **Phone and Email Scraper**.
+
+    Use this built-in Swagger UI to explore and execute every endpoint directly from your browser
+    — no Postman, Thunder Client, or external REST client required.
+
+    ### Quick Workflow
+    1. Call **`GET /api/health`** to confirm the service is up.
+    2. Call **`POST /api/validate-domain`** to test URL syntax and DNS resolution without launching Chromium.
+    3. Call **`POST /api/scrape`** or **`POST /api/scrape/batch`** to extract phone numbers and email addresses.
+    4. Call **`GET /api/results`** to inspect saved records (or pass `?format=csv` to download raw CSV).
+    5. Call **`DELETE /api/results`** to clear `data.csv` after local testing.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+
+tags:
+  - name: Health
+    description: Service liveness and runtime configuration
+  - name: Validation
+    description: Fast-fail URL and DNS pre-flight checks (no browser launch)
+  - name: Scraping
+    description: Headless Chromium contact page extraction
+  - name: Results
+    description: Read, export, and reset persisted CSV records
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Check API health and runtime defaults
+      description: Returns server liveness, uptime, Node.js version, and default scraper configuration.
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+                service: phone-and-email-scraper
+                uptimeSeconds: 42
+                nodeVersion: v20.12.0
+                defaults:
+                  paths:
+                    - /contact
+                    - /contact-us
+                  timeoutMs: 30000
+                timestamp: "2026-11-22T01:50:00.000Z"
+
+  /api/validate-domain:
+    post:
+      tags: [Validation]
+      summary: Validate a URL and verify DNS resolution
+      description: |
+        Performs the same pre-flight URL parsing and `dns.promises.lookup` validation used by the CLI
+        without launching headless Chromium. Ideal for quick validation before submitting a batch.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidateDomainRequest"
+            examples:
+              validDomain:
+                summary: Valid resolvable domain
+                value:
+                  url: https://example.com
+              invalidDomain:
+                summary: Non-existent domain
+                value:
+                  url: https://this-domain-does-not-exist-12345.invalid
+      responses:
+        "200":
+          description: Validation result returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidateDomainResponse"
+              examples:
+                valid:
+                  summary: Valid domain response
+                  value:
+                    valid: true
+                    url: https://example.com
+                    hostname: example.com
+                    address: 93.184.216.34
+                invalid:
+                  summary: Invalid domain response
+                  value:
+                    valid: false
+                    url: https://this-domain-does-not-exist-12345.invalid
+                    hostname: this-domain-does-not-exist-12345.invalid
+                    error: "DNS lookup failed for this-domain-does-not-exist-12345.invalid: ENOTFOUND"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/scrape:
+    post:
+      tags: [Scraping]
+      summary: Scrape phone numbers and emails from a single website
+      description: |
+        Validates the base URL via DNS, launches headless Chromium via Puppeteer, visits each configured
+        sub-path (default: `/contact` and `/contact-us`), extracts phone numbers and deduplicated email
+        addresses, and optionally appends results to `data.csv`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScrapeSingleRequest"
+            examples:
+              defaultScrape:
+                summary: Default contact paths (saved to CSV)
+                value:
+                  url: https://example.com
+              dryRunCustomPaths:
+                summary: Custom paths without writing to CSV
+                value:
+                  url: https://example.com
+                  paths:
+                    - /
+                    - /contact
+                  timeout: 15000
+                  saveToCsv: false
+      responses:
+        "200":
+          description: Scraping completed for the target URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScrapeSingleResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          $ref: "#/components/responses/UnprocessableDomain"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/scrape/batch:
+    post:
+      tags: [Scraping]
+      summary: Scrape multiple websites sequentially with fault isolation
+      description: |
+        Iterates sequentially over an array of base URLs. Invalid or unresolvable domains are marked
+        `skipped`, and individual page/site failures are isolated so the remaining URLs still execute.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScrapeBatchRequest"
+            example:
+              urls:
+                - https://example.com
+                - https://nonexistent-domain-xyz.invalid
+              paths:
+                - /contact
+                - /contact-us
+              saveToCsv: false
+      responses:
+        "200":
+          description: Batch execution completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScrapeBatchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/results:
+    get:
+      tags: [Results]
+      summary: Retrieve scraped results stored in data.csv
+      description: Returns parsed JSON records from `data.csv`, or streams the raw CSV file when `format=csv`.
+      parameters:
+        - name: format
+          in: query
+          required: false
+          description: Set to `csv` to download the raw CSV file instead of JSON.
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        "200":
+          description: Stored records returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResultsResponse"
+            text/csv:
+              schema:
+                type: string
+                example: |
+                  https://example.com/contact,1234567890,info@example.com
+    delete:
+      tags: [Results]
+      summary: Clear all stored results in data.csv
+      description: Truncates `data.csv` to an empty file. Useful for cleaning up after interactive testing.
+      responses:
+        "200":
+          description: Results file cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClearResultsResponse"
+
+components:
+  responses:
+    BadRequest:
+      description: Missing or invalid request payload
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: Bad Request
+            message: "Request body must include a non-empty string field 'url'."
+    UnprocessableDomain:
+      description: URL is malformed or domain failed DNS resolution
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: Unprocessable Entity
+            message: "DNS lookup failed for invalid.example: ENOTFOUND"
+    InternalError:
+      description: Unexpected server or Puppeteer error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        service:
+          type: string
+          example: phone-and-email-scraper
+        uptimeSeconds:
+          type: integer
+          example: 42
+        nodeVersion:
+          type: string
+          example: v20.12.0
+        defaults:
+          type: object
+          properties:
+            paths:
+              type: array
+              items:
+                type: string
+            timeoutMs:
+              type: integer
+        timestamp:
+          type: string
+          format: date-time
+
+    ValidateDomainRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Full base URL including http:// or https://
+          example: https://example.com
+
+    ValidateDomainResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        url:
+          type: string
+        hostname:
+          type: string
+        address:
+          type: string
+          description: Resolved IPv4/IPv6 address (present when valid=true)
+        error:
+          type: string
+          description: Validation or DNS error message (present when valid=false)
+
+    ScrapeSingleRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          example: https://example.com
+        paths:
+          type: array
+          items:
+            type: string
+          description: Contact sub-paths to visit. Defaults to `["/contact", "/contact-us"]`.
+          example: ["/contact", "/contact-us"]
+        timeout:
+          type: integer
+          minimum: 1000
+          maximum: 120000
+          default: 30000
+          description: Navigation timeout per page in milliseconds.
+        saveToCsv:
+          type: boolean
+          default: true
+          description: Set to `false` for a dry run without appending to `data.csv`.
+
+    PageExtractionResult:
+      type: object
+      properties:
+        pageUrl:
+          type: string
+          example: https://example.com/contact
+        status:
+          type: string
+          enum: [success, error]
+        phoneNumbers:
+          type: array
+          items:
+            type: string
+          example: ["1234567890"]
+        emails:
+          type: array
+          items:
+            type: string
+          example: ["info@example.com"]
+        error:
+          type: string
+          description: Present only when status="error"
+
+    ScrapeSingleResponse:
+      type: object
+      properties:
+        url:
+          type: string
+        scrapedAt:
+          type: string
+          format: date-time
+        savedToCsv:
+          type: boolean
+        csvFile:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/PageExtractionResult"
+
+    ScrapeBatchRequest:
+      type: object
+      required: [urls]
+      properties:
+        urls:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uri
+          example: ["https://example.com"]
+        paths:
+          type: array
+          items:
+            type: string
+        timeout:
+          type: integer
+          minimum: 1000
+          maximum: 120000
+          default: 30000
+        saveToCsv:
+          type: boolean
+          default: true
+
+    ScrapeBatchResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        succeeded:
+          type: integer
+        skipped:
+          type: integer
+        failed:
+          type: integer
+        savedToCsv:
+          type: boolean
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              url:
+                type: string
+              status:
+                type: string
+                enum: [completed, skipped, failed]
+              reason:
+                type: string
+              scrapedAt:
+                type: string
+                format: date-time
+              results:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PageExtractionResult"
+
+    ResultsResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+        file:
+          type: string
+          example: data.csv
+        records:
+          type: array
+          items:
+            type: object
+            properties:
+              pageUrl:
+                type: string
+              phoneNumbers:
+                type: array
+                items:
+                  type: string
+              emails:
+                type: array
+                items:
+                  type: string
+
+    ClearResultsResponse:
+      type: object
+      properties:
+        cleared:
+          type: boolean
+          example: true
+        file:
+          type: string
+          example: data.csv
+        timestamp:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string

@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "skills": {
+    "senior-repo-standards": {
+      "source": "digitalterrene/senior-repo-standards",
+      "commit": "3a5ff18ef53ec02ea8b54cd8f5346ba8163ae3ef",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "f947a069172d1d85750457cc3e7fbf4c462e122207d083f8c0adcf72c8c69c38"
+    }
+  }
+}

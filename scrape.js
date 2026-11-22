@@ -1,17 +1,14 @@
-const { scrapeAndSaveData } = require("./scraper");
+const { scrapeAndSaveData, validateDomain } = require("./scraper");
 const { urls } = require("./urls");
-const dns = require("dns").promises;
 
 // Function to validate if a domain is resolvable
 async function isValidDomain(url) {
-  try {
-    const domain = new URL(url).hostname;
-    await dns.lookup(domain);
-    return true;
-  } catch (error) {
+  const validation = await validateDomain(url);
+  if (!validation.valid) {
     console.error(`Invalid domain: ${url}`);
     return false;
   }
+  return true;
 }
 
 // Main scrape function
