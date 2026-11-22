@@ -1,2 +1,105 @@
-/node_modules
-/.env
+# ==============================================================================
+# SENIOR REPO STANDARDS: HARDENED PRODUCTION .GITIGNORE
+# Tailored for Node.js / Puppeteer — hardened against credential leaks,
+# cache bloat, runtime dumps, and OS/editor noise.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. CREDENTIALS, SECRETS & ENVIRONMENT FILES (ZERO TOLERANCE)
+# ------------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+*.jks
+*.keystore
+id_rsa*
+id_ed25519*
+*credentials*.json
+*token*.json
+serviceAccountKey.json
+gcloud-key*.json
+.aws/
+.npmrc
+.yarnrc
+
+# ------------------------------------------------------------------------------
+# 2. RUNTIME LOGS, HEAP DUMPS & DIAGNOSTICS
+# ------------------------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+core
+*.core
+*.heapdump
+*.heapsnapshot
+folders*.txt
+diag*.txt
+api_logs*.txt
+*.pid
+*.seed
+
+# ------------------------------------------------------------------------------
+# 3. DEPENDENCY & PACKAGE MANAGER DIRECTORIES
+# ------------------------------------------------------------------------------
+node_modules/
+jspm_packages/
+.pnp
+.pnp.js
+vendor/
+
+# ------------------------------------------------------------------------------
+# 4. BUILD ARTIFACTS, BUNDLES & CACHES
+# ------------------------------------------------------------------------------
+dist/
+build/
+out/
+.cache/
+.turbo/
+.next/
+.parcel-cache/
+*.tsbuildinfo
+
+# ------------------------------------------------------------------------------
+# 5. TESTING, COVERAGE & SCRAPER DIAGNOSTIC OUTPUTS
+# ------------------------------------------------------------------------------
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+*.screenshot.png
+
+# ------------------------------------------------------------------------------
+# 6. OPERATING SYSTEM ARTIFACTS
+# ------------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ------------------------------------------------------------------------------
+# 7. IDE & CODE EDITOR ARTIFACTS
+# ------------------------------------------------------------------------------
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json

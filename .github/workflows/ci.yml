@@ -1,0 +1,59 @@
+name: CI Quality Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit-secrets:
+    name: Secret Leak Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  verify-project:
+    name: Syntax, Audit & Hygiene Checks
+    runs-on: ubuntu-latest
+    needs: audit-secrets
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Syntax Check Source Files
+        run: |
+          node --check scrape.js
+          node --check scraper.js
+          node --check urls.js
+          node --check server.js
+
+      - name: Verify No Scraped PII in data.csv
+        run: |
+          if [ -s data.csv ]; then
+            echo "ERROR: data.csv is non-empty. Do not commit scraped contact data."
+            exit 1
+          fi
+
+      - name: Run Senior Repo Hygiene Audit
+        run: |
+          if [ -f .agents/skills/senior-repo-standards/scripts/audit-hygiene.js ]; then
+            node .agents/skills/senior-repo-standards/scripts/audit-hygiene.js
+          fi
